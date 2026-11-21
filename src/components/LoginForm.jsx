@@ -32,12 +32,50 @@ export default function LoginForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const trimmedEmail = formData.email.trim();
+
+    if (!trimmedEmail && !formData.password) {
+      setError({
+        title: "Email dan kata sandi wajib diisi.",
+        field: "email",
+        message: "Masukkan email dan kata sandi Anda terlebih dahulu.",
+      });
+      return;
+    }
+
+    if (!trimmedEmail) {
+      setError({
+        title: "Email wajib diisi.",
+        field: "email",
+        message: "Masukkan email madrasah atau Kemenag Anda.",
+      });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError({
+        title: "Format email tidak valid.",
+        field: "email",
+        message: "Periksa kembali format alamat email Anda.",
+      });
+      return;
+    }
+
+    if (!formData.password) {
+      setError({
+        title: "Kata sandi wajib diisi.",
+        field: "password",
+        message: "Masukkan kata sandi Anda.",
+      });
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
       const { redirectTo } = await login(
-        formData.email.trim(),
+        trimmedEmail,
         formData.password,
         formData.remember,
       );
@@ -115,7 +153,7 @@ export default function LoginForm() {
       )}
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="relative z-10 mt-5 space-y-4">
+      <form noValidate onSubmit={handleSubmit} className="relative z-10 mt-5 space-y-4">
         {/* Email */}
         <div className="animate-item delay-300">
           <label htmlFor="login-email" className="mb-1.5 block text-sm font-bold text-gray-800">
@@ -138,6 +176,12 @@ export default function LoginForm() {
               }`}
             />
           </div>
+          {error?.field === "email" && (
+            <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-red-600">
+              <span className="mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-red-500 text-[9px] font-bold">!</span>
+              {error.message}
+            </p>
+          )}
         </div>
 
         {/* Password */}

@@ -22,17 +22,25 @@ const targetAudiens = [
   { label: "Wali Murid", value: "wali" },
 ];
 
+function getTodayLocalString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function BuatPengumuman() {
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     jenis: "penting",
     judul: "",
-    tanggal: "2026-10-23",
+    tanggal: getTodayLocalString(),
     target: "semua",
     prioritas: "penting",
     deskripsi: "",
-  });
+  }));
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -77,7 +85,7 @@ export default function BuatPengumuman() {
 
   return (
     <DashboardLayout>
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
 
           {/* Header - Animasi Masuk */}
           <div className="animate-item delay-100 mt-3 mb-5 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">

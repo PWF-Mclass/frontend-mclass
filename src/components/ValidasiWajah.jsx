@@ -1,37 +1,18 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import DashboardLayout from "./dashboard/DashboardLayout";
-import ModalSetujuiValidasi from "./ModalSetujuiValidasi";
-import ModalTolakValidasi from "./ModalTolakValidasi";
 import Toast from "./Toast";
+import { resolveBackendUrl } from "../lib/api";
+import {
+  getFaceScanDetail,
+  resetStudentFaceEnrollment,
+} from "../services/dashboardService";
+import { useAuth } from "../context/AuthContext";
 
-// ============ DATA SISWA ============
-const SISWA_DATA = {
-  "2601001": { nis: "2601001", nama: "Achmad Shodiq", kelas: "7", jenisKelamin: "L", tanggalLahir: "12 Mei 2013", waliMurid: "Bpk. Suryanto", avatarSeed: "achmad" },
-  "2601002": { nis: "2601002", nama: "Aisyah Nabila", kelas: "7", jenisKelamin: "P", tanggalLahir: "04 Agustus 2013", waliMurid: "Bpk. Hendra", avatarSeed: "aisyah" },
-  "2602001": { nis: "2602001", nama: "Abdul Rahman", kelas: "8", jenisKelamin: "L", tanggalLahir: "05 Mei 2012", waliMurid: "Bpk. Hermawan", avatarSeed: "abdul-rahman" },
-  "2603001": { nis: "2603001", nama: "Aang Kunaefi", kelas: "9", jenisKelamin: "L", tanggalLahir: "12 Maret 2011", waliMurid: "Bpk. Suparno", avatarSeed: "aang-kunaefi" },
-};
-
-const getSiswa = (nis) => {
-  if (SISWA_DATA[nis]) return SISWA_DATA[nis];
-  return {
-    nis: nis || "2601001",
-    nama: "Siswa Tidak Diketahui",
-    kelas: "-",
-    jenisKelamin: "-",
-    tanggalLahir: "-",
-    waliMurid: "-",
-    avatarSeed: "unknown",
-  };
-};
-
-const getWajahUrl = (seed, size = 300) =>
-  `https://ui-avatars.com/api/?name=${encodeURIComponent(seed)}&size=${size}&background=047857&color=fff&bold=true`;
-
-// ============ DATA RADIUS ============
-const RADIUS_GEOFENCE = 50;
-const JARAK_SISWA = 12;
+const getAvatarFallbackUrl = (seed, size = 300) =>
+  `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    seed || "Siswa"
+  )}&size=${size}&background=047857&color=fff&bold=true`;
 
 // ============ ICON MAP ============
 const icons = {
@@ -67,20 +48,29 @@ const icons = {
   ),
 };
 
+function formatAttemptTime(isoStr) {
+  if (!isoStr) return "Belum ada scan";
+  const parsed = new Date(isoStr);
+  if (Number.isNaN(parsed.getTime())) return isoStr;
+  return (
+    parsed.toLocaleString("id-ID", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Asia/Jakarta",
+    }) + " WIB"
+  );
+}
+
 export default function ValidasiWajah() {
   const { nis } = useParams();
-  const siswa = getSiswa(nis);
-
-  const [status, setStatus] = useState("pending");
-  const [catatan, setCatatan] = useState("");
-  const [preview, setPreview] = useState(null);
-
-  const [showApproveModal, setShowApproveModal] = useState(false);
-  const [isApproving, setIsApproving] = useState(false);
-
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [isRejecting, setIsRejecting] = useState(false);
-
+  const { user } = useAuth();
+  const [scanData, setScanData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isResetting, setIsResetting] = useState(false);
   const [toast, setToast] = useState({
     open: false,
     title: "",
@@ -88,273 +78,318 @@ export default function ValidasiWajah() {
     type: "success",
   });
 
-  const persenRadius = Math.min((JARAK_SISWA / RADIUS_GEOFENCE) * 100, 100);
-  const dalamRadius = JARAK_SISWA <= RADIUS_GEOFENCE;
+  const loadFaceDetail = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await getFaceScanDetail(nis);
+      setScanData(data);
+    } catch {
+      setScanData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [nis]);
 
-  const handleApprove = () => setShowApproveModal(true);
-  const handleConfirmApprove = () => {
-    setIsApproving(true);
-    setTimeout(() => {
-      setIsApproving(false);
-      setShowApproveModal(false);
-      setStatus("approved");
+  useEffect(() => {
+    loadFaceDetail();
+  }, [loadFaceDetail]);
+
+  const handleResetFaceEnrollment = async () => {
+    const targetNisn = scanData?.student?.nisn || nis;
+    if (!targetNisn) return;
+
+    setIsResetting(true);
+    try {
+      const res = await resetStudentFaceEnrollment(targetNisn);
       setToast({
         open: true,
-        title: "Validasi Wajah Berhasil",
-        message: `Data biometrik ${siswa.nama} telah diverifikasi dan disimpan.`,
+        title: "Enrollment Wajah Direset",
+        message: `Template wajah ${res.student_name || targetNisn} berhasil direset (${res.revoked_templates} sampel dicabut). Siswa dapat mendaftarkan wajah ulang di aplikasi mobile.`,
         type: "success",
       });
-    }, 800);
-  };
-
-  const handleReject = () => setShowRejectModal(true);
-  const handleConfirmReject = (alasan) => {
-    setIsRejecting(true);
-    setTimeout(() => {
-      setIsRejecting(false);
-      setShowRejectModal(false);
-      setCatatan(alasan);
-      setStatus("rejected");
+      await loadFaceDetail();
+    } catch (error) {
       setToast({
         open: true,
-        title: "Validasi Ditolak",
-        message: `Foto wajah ${siswa.nama} ditolak. Siswa diminta mengunggah ulang.`,
+        title: "Gagal Mereset Wajah",
+        message: error.message || "Terjadi kesalahan saat mereset template wajah.",
         type: "error",
       });
-    }, 800);
+    } finally {
+      setIsResetting(false);
+    }
   };
 
-  const handleReset = () => {
-    setStatus("pending");
-    setCatatan("");
+  const student = scanData?.student || {
+    nisn: nis || "-",
+    name: "Memuat...",
+    class: null,
+    gender: "L",
+    guardian_name: null,
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) setPreview(URL.createObjectURL(file));
-  };
+  const radiusGeofence = scanData?.location?.radius_m ?? 15;
+  const jarakSiswa =
+    scanData?.location?.distance_m !== null &&
+    scanData?.location?.distance_m !== undefined
+      ? Math.round(Number(scanData.location.distance_m))
+      : null;
+  const dalamRadius =
+    scanData?.location?.within_radius !== null &&
+    scanData?.location?.within_radius !== undefined
+      ? Boolean(scanData.location.within_radius)
+      : jarakSiswa !== null
+      ? jarakSiswa <= radiusGeofence
+      : true;
+  const persenRadius =
+    jarakSiswa !== null && radiusGeofence > 0
+      ? Math.min((jarakSiswa / radiusGeofence) * 100, 100)
+      : 0;
 
-  const tanggalHariIni = new Date().toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const isMatched =
+    scanData?.result === "match" || scanData?.outcome === "recorded";
+  const isRejected =
+    scanData?.outcome &&
+    scanData.outcome !== "recorded" &&
+    scanData.outcome !== "not_attempted";
+
+  const capturedUrl = resolveBackendUrl(scanData?.captured_photo_url);
+  const referenceUrl = resolveBackendUrl(scanData?.reference_photo_url);
+  const photoToShow =
+    capturedUrl || referenceUrl || getAvatarFallbackUrl(student.name, 300);
+
+  const backClassId = student.class?.id || "7";
 
   return (
     <DashboardLayout>
-        <main className="flex-1 overflow-y-auto p-6">
-
-          {/* Header - Animasi Masuk */}
-          <div className="animate-item delay-100 mt-3 mb-5 flex items-start gap-3">
-            <Link
-              to={`/detail-kelas/${siswa.kelas}`}
-              className="mt-1 flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="m12 19-7-7 7-7M19 12H5" />
-              </svg>
-            </Link>
-            <div>
-              <h2 className="text-xl font-extrabold text-gray-900">
-                Validasi Foto Wajah
-              </h2>
-              <p className="mt-1 text-xs text-gray-500">
-                Verifikasi wajah siswa untuk keperluan presensi biometrik AI
-              </p>
-            </div>
-          </div>
-
-          {/* Info Siswa - Animasi Masuk */}
-          <div className="animate-item delay-200 rounded-xl border border-gray-200 bg-white p-5 transition-all duration-300 hover:shadow-md">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-                {icons.user}
-              </div>
-              <div className="flex-1">
-                <h3 className="text-base font-bold text-gray-900">{siswa.nama}</h3>
-                <p className="mt-0.5 text-xs text-gray-500">
-                  NIS: <span className="font-mono text-gray-700">{siswa.nis}</span> •{" "}
-                  Kelas <strong className="text-gray-700">{siswa.kelas}</strong> •{" "}
-                  {siswa.jenisKelamin === "L" ? "Laki-laki" : "Perempuan"}
-                </p>
-              </div>
-              <span
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
-                  status === "approved"
-                    ? "bg-emerald-50 text-emerald-700"
-                    : status === "rejected"
-                    ? "bg-red-50 text-red-700"
-                    : "bg-amber-50 text-amber-700"
-                }`}
-              >
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    status === "approved"
-                      ? "bg-emerald-500"
-                      : status === "rejected"
-                      ? "bg-red-500"
-                      : "bg-amber-500 animate-pulse"
-                  }`}
-                ></span>
-                {status === "approved"
-                  ? "Terverifikasi"
-                  : status === "rejected"
-                  ? "Ditolak"
-                  : "Menunggu Validasi"}
-              </span>
-            </div>
-          </div>
-
-          {/* Foto Validasi Hari Ini - Animasi Masuk */}
-          <div className="animate-item delay-300 mt-6 rounded-xl border border-gray-200 bg-white p-5 transition-all duration-300 hover:shadow-md">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-gray-900">Foto Wajah Hari Ini</h3>
-                <p className="mt-0.5 text-[10px] text-gray-500">
-                  Foto yang diambil saat sesi presensi — {tanggalHariIni}
-                </p>
-              </div>
-              <span className="rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-                VALIDASI
-              </span>
-            </div>
-
-            <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
-              {/* Foto */}
-              <div className="flex justify-center lg:justify-start">
-                <div className="relative group">
-                  {preview ? (
-                    <img
-                      src={preview}
-                      alt="Preview foto validasi"
-                      className="h-72 w-72 rounded-xl border-4 border-amber-100 object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                    />
-                  ) : (
-                    <img
-                      src={getWajahUrl(siswa.avatarSeed || siswa.nama, 300)}
-                      alt={`Foto validasi ${siswa.nama}`}
-                      className="h-72 w-72 rounded-xl border-4 border-amber-100 object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                    />
-                  )}
-                  <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-amber-600 px-2.5 py-1 text-[10px] font-bold text-white shadow-lg">
-                    {icons.camera}
-                    Sesi Hari Ini
-                  </span>
-                </div>
-              </div>
-
-              {/* Detail Foto + Upload */}
-              <div className="flex flex-col justify-between gap-4">
-                <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-4">
-                  <h4 className="text-xs font-bold text-gray-900">Detail Foto</h4>
-                  <div className="mt-3 space-y-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">Waktu Pengambilan</span>
-                      <span className="font-semibold text-gray-800">06:42 WIB</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">Lokasi</span>
-                      <span className="font-semibold text-gray-800">Kampus MTs Al-Ma'arif 02</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">Radius Geofence</span>
-                      <span className="font-semibold text-gray-800">{RADIUS_GEOFENCE} meter</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">Jarak dari Pusat</span>
-                      <span className={`font-semibold ${dalamRadius ? "text-emerald-700" : "text-red-600"}`}>
-                        {JARAK_SISWA} meter
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">Kualitas Foto</span>
-                      <span className="font-semibold text-emerald-700">Baik (HD)</span>
-                    </div>
-                  </div>
-
-                  {/* Progress Bar Radius */}
-                  <div className="mt-3 rounded-lg border border-gray-100 bg-white p-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-gray-700">Radius Terpakai</span>
-                      <span className={`text-[10px] font-bold ${dalamRadius ? "text-emerald-700" : "text-red-600"}`}>
-                        {JARAK_SISWA} / {RADIUS_GEOFENCE} m
-                      </span>
-                    </div>
-                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                      <div
-                        className={`h-full rounded-full ${dalamRadius ? "bg-emerald-500" : "bg-red-500"}`}
-                        style={{ width: `${persenRadius}%` }}
-                      ></div>
-                    </div>
-                    <p className={`mt-1.5 flex items-center gap-1 text-[10px] font-semibold ${dalamRadius ? "text-emerald-700" : "text-red-600"}`}>
-                      {icons.pin}
-                      {dalamRadius ? "Dalam radius geofence (aman)" : "Di luar radius geofence (perlu tindak lanjut)"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Action Buttons - Animasi Masuk */}
-          <div className="animate-item delay-400 mt-6 flex items-center justify-between rounded-xl border border-gray-200 bg-white p-4 transition-all duration-300 hover:shadow-md">
-            <p className="text-[10px] text-gray-500">
-              {status === "pending"
-                ? "Pilih tindakan validasi di sebelah kanan."
-                : status === "approved"
-                ? "✓ Wajah telah divalidasi dan disetujui."
-                : "✗ Validasi ditolak. Siswa akan diminta upload ulang."}
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        {/* Header - Animasi Masuk */}
+        <div className="animate-item delay-100 mt-3 mb-5 flex items-start gap-3">
+          <Link
+            to={`/detail-kelas/${backClassId}`}
+            className="mt-1 flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="m12 19-7-7 7-7M19 12H5" />
+            </svg>
+          </Link>
+          <div>
+            <h2 className="text-xl font-extrabold text-gray-900">
+              Detail Verifikasi Biometrik Wajah
+            </h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Data hasil verifikasi wajah & geolokasi presensi siswa dari database
             </p>
-            <div className="flex items-center gap-2">
-              {status !== "pending" && (
-                <button onClick={handleReset} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
-                  Reset
-                </button>
-              )}
-              <button
-                onClick={handleReject}
-                disabled={status !== "pending"}
-                className="flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 hover:shadow-sm active:scale-[0.98] transition-all disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {icons.close}
-                Tolak Validasi
-              </button>
-              <button
-                onClick={handleApprove}
-                disabled={status !== "pending"}
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800 hover:shadow-md active:scale-[0.98] transition-all disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {icons.check}
-                Setujui Validasi
-              </button>
-            </div>
           </div>
+        </div>
 
-          {/* MODALS & TOAST */}
-          <ModalSetujuiValidasi
-            isOpen={showApproveModal}
-            onClose={() => setShowApproveModal(false)}
-            onConfirm={handleConfirmApprove}
-            siswa={siswa}
-            isLoading={isApproving}
-          />
-          <ModalTolakValidasi
-            isOpen={showRejectModal}
-            onClose={() => setShowRejectModal(false)}
-            onConfirm={handleConfirmReject}
-            siswa={siswa}
-            isLoading={isRejecting}
-          />
+        {isLoading ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-xs text-gray-400">
+            Memuat data verifikasi wajah siswa dari database...
+          </div>
+        ) : !scanData ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-xs text-gray-400">
+            Data siswa atau hasil scan wajah tidak ditemukan di database.
+          </div>
+        ) : (
+          <>
+            {/* Info Siswa - Animasi Masuk */}
+            <div className="animate-item delay-200 rounded-xl border border-gray-200 bg-white p-5 transition-all duration-300 hover:shadow-md">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                  {icons.user}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold text-gray-900">{student.name}</h3>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    NISN: <span className="font-mono text-gray-700">{student.nisn}</span> •{" "}
+                    Kelas <strong className="text-gray-700">{student.class?.name || "-"}</strong> •{" "}
+                    {student.gender === "P" ? "Perempuan" : "Laki-laki"}
+                    {student.guardian_name ? ` • Wali: ${student.guardian_name}` : ""}
+                  </p>
+                </div>
+                <span
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
+                    isMatched
+                      ? "bg-emerald-50 text-emerald-700"
+                      : isRejected
+                      ? "bg-red-50 text-red-700"
+                      : "bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      isMatched
+                        ? "bg-emerald-500"
+                        : isRejected
+                        ? "bg-red-500"
+                        : "bg-amber-500 animate-pulse"
+                    }`}
+                  ></span>
+                  {scanData.result_label ||
+                    (isMatched
+                      ? "Terverifikasi AI"
+                      : isRejected
+                      ? "Ditolak Sistem"
+                      : "Belum Scan Hari Ini")}
+                </span>
+              </div>
+            </div>
 
-          <Toast
-            isOpen={toast.open}
-            onClose={() => setToast({ ...toast, open: false })}
-            title={toast.title}
-            message={toast.message}
-            type={toast.type}
-          />
+            {/* Foto Validasi - Animasi Masuk */}
+            <div className="animate-item delay-300 mt-6 rounded-xl border border-gray-200 bg-white p-5 transition-all duration-300 hover:shadow-md">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">
+                    Foto Wajah & Hasil Pencocokan AI
+                  </h3>
+                  <p className="mt-0.5 text-[10px] text-gray-500">
+                    Waktu pengambilan: {formatAttemptTime(scanData.attempted_at)}
+                  </p>
+                </div>
+                <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                  BIOMETRIK AI
+                </span>
+              </div>
 
-        </main>
+              <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
+                {/* Foto */}
+                <div className="flex justify-center lg:justify-start">
+                  <div className="relative group">
+                    <img
+                      src={photoToShow}
+                      alt={`Foto wajah ${student.name}`}
+                      className="h-72 w-72 rounded-xl border-4 border-emerald-100 object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                    />
+                    <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-emerald-700 px-2.5 py-1 text-[10px] font-bold text-white shadow-lg">
+                      {icons.camera}
+                      {capturedUrl
+                        ? "Foto Scan Presensi"
+                        : referenceUrl
+                        ? "Foto Referensi Wajah"
+                        : "Belum Ada Foto"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Detail Foto */}
+                <div className="flex flex-col justify-between gap-4">
+                  <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-4">
+                    <h4 className="text-xs font-bold text-gray-900">
+                      Detail Verifikasi Biometrik & Geolokasi
+                    </h4>
+                    <div className="mt-3 space-y-2">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-500">Waktu Scan</span>
+                        <span className="font-semibold text-gray-800">
+                          {formatAttemptTime(scanData.attempted_at)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-500">Skor Kemiripan Wajah</span>
+                        <span className="font-semibold text-emerald-700">
+                          {scanData.similarity !== null &&
+                          scanData.similarity !== undefined
+                            ? `${(Number(scanData.similarity) * 100).toFixed(1)}% (Batas: ${(
+                                Number(scanData.match_threshold || 0.4) * 100
+                              ).toFixed(0)}%)`
+                            : "—"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-500">Status Presensi</span>
+                        <span className="font-semibold uppercase text-gray-800">
+                          {scanData.record?.status || scanData.outcome || "Belum Presensi"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-500">Radius Geofence Sekolah</span>
+                        <span className="font-semibold text-gray-800">
+                          {radiusGeofence} meter
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-500">Jarak Siswa dari Pusat</span>
+                        <span
+                          className={`font-semibold ${
+                            dalamRadius ? "text-emerald-700" : "text-red-600"
+                          }`}
+                        >
+                          {jarakSiswa !== null ? `${jarakSiswa} meter` : "—"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar Radius */}
+                    <div className="mt-3 rounded-lg border border-gray-100 bg-white p-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-gray-700">
+                          Radius Terpakai
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold ${
+                            dalamRadius ? "text-emerald-700" : "text-red-600"
+                          }`}
+                        >
+                          {jarakSiswa !== null ? jarakSiswa : 0} / {radiusGeofence} m
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                        <div
+                          className={`h-full rounded-full ${
+                            dalamRadius ? "bg-emerald-500" : "bg-red-500"
+                          }`}
+                          style={{ width: `${persenRadius}%` }}
+                        ></div>
+                      </div>
+                      <p
+                        className={`mt-1.5 flex items-center gap-1 text-[10px] font-semibold ${
+                          dalamRadius ? "text-emerald-700" : "text-red-600"
+                        }`}
+                      >
+                        {icons.pin}
+                        {jarakSiswa === null
+                          ? "Siswa belum melakukan scan lokasi hari ini"
+                          : dalamRadius
+                          ? "Dalam radius geofence sekolah (aman)"
+                          : "Di luar radius geofence sekolah"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons (Reset Enrollment Wajah oleh Admin) */}
+            <div className="animate-item delay-400 mt-6 flex flex-col items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 transition-all duration-300 hover:shadow-md sm:flex-row sm:items-center">
+              <p className="text-[11px] text-gray-500">
+                Verifikasi presensi wajah diproses secara otomatis oleh AI. Jika siswa mengalami kendala pengenalan wajah, Admin dapat mereset pendaftaran wajah siswa.
+              </p>
+              {user?.role === "admin" && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isResetting}
+                    onClick={handleResetFaceEnrollment}
+                    className="flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-4 py-2 text-xs font-bold text-red-600 transition-all hover:bg-red-50 hover:shadow-sm active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {icons.close}
+                    {isResetting ? "Mereset..." : "Reset Enrollment Wajah Siswa"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        <Toast
+          isOpen={toast.open}
+          onClose={() => setToast({ ...toast, open: false })}
+          title={toast.title}
+          message={toast.message}
+          type={toast.type}
+        />
+      </main>
     </DashboardLayout>
   );
 }

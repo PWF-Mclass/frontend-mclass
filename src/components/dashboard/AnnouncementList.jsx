@@ -2,33 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listAnnouncements } from "../../services/announcementService";
 
-const fallbackAnnouncements = [
-  {
-    id: 1,
-    tag: "PENTING",
-    tagColor: "bg-emerald-600",
-    title: "Upacara Peringatan Hari Santri Nasional",
-    meta: "Hari ini • 14:30 WIB",
-    desc: "Seluruh siswa diharapkan hadir dengan pakaian seragam batik dan membawa buku catatan untuk mengikuti upacara. Presensi akan dimulai pukul 07:00 WIB di lapangan utama madrasah.",
-  },
-  {
-    id: 2,
-    tag: "PENTING",
-    tagColor: "bg-amber-500",
-    title: "Delegasi Kegiatan Lomba Pramuka Gudep 07-08",
-    meta: "Hari ini • 14:30 WIB",
-    desc: "Sebanyak 16 siswa terpilih akan mengikuti upacara dan penyerahan kontingen oleh Kamad pada 08:00 WIB. Presensi akan dilakukan melalui aplikasi presensi sebelum kegiatan berlangsung.",
-  },
-  {
-    id: 3,
-    tag: "INFO",
-    tagColor: "bg-blue-500",
-    title: "Penyelesaian Jam Presensi Kependidikan Hari Ini",
-    meta: "2 hari lalu • 08:00 WIB",
-    desc: "Presensi kepulangan siswa akan diproses menggunakan sistem digital. Jam presensi kepulangan akan disesuaikan dengan jadwal harian. Bagi siswa yang berhalangan hadir, harap konfirmasi ke wali kelas masing-masing.",
-  },
-];
-
 function mapFromBackend(item) {
   const isUrgent = item.priority === "urgent" || item.priority === "important";
   const isHoliday = item.category === "holiday";
@@ -53,24 +26,29 @@ function mapFromBackend(item) {
 }
 
 export default function AnnouncementList() {
-  const [items, setItems] = useState(fallbackAnnouncements);
+  const [items, setItems] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("");
 
   useEffect(() => {
     let isMounted = true;
+    setIsLoading(true);
     listAnnouncements({
       category: selectedCategory || undefined,
     })
       .then((data) => {
         if (!isMounted) return;
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setItems(data.slice(0, 5).map(mapFromBackend));
-        } else if (selectedCategory) {
+        } else {
           setItems([]);
         }
       })
       .catch(() => {
-        // Keep fallback announcements on offline/unauthenticated preview
+        if (isMounted) setItems([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -81,7 +59,7 @@ export default function AnnouncementList() {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h3 className="text-base font-bold text-gray-900">
             Pengumuman Kelas & Madrasah
@@ -90,7 +68,7 @@ export default function AnnouncementList() {
             Informasi terbaru seputar kegiatan KBM & dispensasi siswa.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
@@ -118,7 +96,11 @@ export default function AnnouncementList() {
 
       {/* List */}
       <div className="mt-4 divide-y divide-gray-100">
-        {items.length === 0 ? (
+        {isLoading ? (
+          <p className="py-4 text-center text-xs text-gray-400">
+            Memuat pengumuman...
+          </p>
+        ) : items.length === 0 ? (
           <p className="py-4 text-center text-xs text-gray-400">
             Tidak ada pengumuman pada kategori ini.
           </p>

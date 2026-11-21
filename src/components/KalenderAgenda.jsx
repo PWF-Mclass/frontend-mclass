@@ -118,10 +118,46 @@ function buildMonthGrid(year, monthIndex0) {
   return cells;
 }
 
+const eventTypeSymbols = {
+  red: (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7" />
+    </svg>
+  ),
+  amber: (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  ),
+  emerald: (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="m3 11 18-5v12L3 14v-3z" />
+      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+    </svg>
+  ),
+};
+
+function resolveAnnouncementMarkerColor(item) {
+  if (item.category === "holiday" || item.type === "libur") {
+    return "red";
+  }
+  if (
+    item.category === "important" ||
+    item.priority === "important" ||
+    item.priority === "urgent" ||
+    item.priority_code === "important" ||
+    item.priority_code === "urgent"
+  ) {
+    return "amber";
+  }
+  return "emerald";
+}
+
 export default function KalenderAgenda() {
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [selectedMonthIdx, setSelectedMonthIdx] = useState(9); // 9 = Oktober (0-indexed)
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [selectedMonthIdx, setSelectedMonthIdx] = useState(() => new Date().getMonth());
   const [viewMode, setViewMode] = useState("Bulanan");
+  const [selectedDay, setSelectedDay] = useState(null);
 
   const [calendarSummary, setCalendarSummary] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
@@ -169,6 +205,7 @@ export default function KalenderAgenda() {
   }, [loadData]);
 
   const handlePrevMonth = () => {
+    setSelectedDay(null);
     if (selectedMonthIdx === 0) {
       setSelectedYear((y) => y - 1);
       setSelectedMonthIdx(11);
@@ -178,6 +215,7 @@ export default function KalenderAgenda() {
   };
 
   const handleNextMonth = () => {
+    setSelectedDay(null);
     if (selectedMonthIdx === 11) {
       setSelectedYear((y) => y + 1);
       setSelectedMonthIdx(0);
@@ -242,11 +280,11 @@ export default function KalenderAgenda() {
   };
 
   const statsData = useMemo(() => {
-    const totalAgenda = calendarSummary?.total_agenda ?? 6;
-    const pentingTotal = calendarSummary?.agenda_penting?.total ?? 2;
-    const pentingMingguIni = calendarSummary?.agenda_penting?.this_week ?? 2;
-    const liburNasional = calendarSummary?.libur_nasional ?? 1;
-    const sedangBerlangsung = calendarSummary?.sedang_berlangsung ?? 1;
+    const totalAgenda = calendarSummary?.total_agenda ?? 0;
+    const pentingTotal = calendarSummary?.agenda_penting?.total ?? 0;
+    const pentingMingguIni = calendarSummary?.agenda_penting?.this_week ?? 0;
+    const liburNasional = calendarSummary?.libur_nasional ?? 0;
+    const sedangBerlangsung = calendarSummary?.sedang_berlangsung ?? 0;
 
     return [
       {
@@ -295,46 +333,82 @@ export default function KalenderAgenda() {
   );
 
   const eventDays = useMemo(() => {
+    const map = {};
+
     if (Array.isArray(calendarSummary?.days) && calendarSummary.days.length > 0) {
-      const map = {};
       calendarSummary.days.forEach((d) => {
-        if (d.has_event && d.color) {
+        const dayEvents = Array.isArray(d.events) ? d.events : [];
+        const hasEvent = Boolean(d.has_event) || dayEvents.length > 0 || Boolean(d.color);
+        if (hasEvent && d.color) {
           map[d.day] = {
             type: d.color,
-            label: d.label || "Agenda",
+            label: d.label || dayEvents[0]?.title || "Pengumuman",
+            count: dayEvents.length || 1,
+            events: dayEvents,
             isToday: d.is_today,
           };
         }
       });
-      return map;
     }
 
-    // Fallback default markers if backend has no events in that month yet
-    if (selectedYear === 2026 && selectedMonthIdx === 9) {
-      return {
-        5: { type: "emerald", label: "Upacara" },
-        12: { type: "amber", label: "PTS" },
-        17: { type: "emerald", label: "Kegiatan" },
-        23: { type: "emerald", label: "Hari Ini" },
-        28: { type: "red", label: "Libur" },
-        30: { type: "amber", label: "Rapat" },
-      };
+    // Fallback/supplement dari daftar announcements bulan yang dipilih
+    if (Array.isArray(announcements) && announcements.length > 0) {
+      const daysInCurrentMonth = new Date(selectedYear, selectedMonthIdx + 1, 0).getDate();
+      for (let dayNum = 1; dayNum <= daysInCurrentMonth; dayNum++) {
+        if (map[dayNum]) continue;
+        const dateStr = `${monthString}-${String(dayNum).padStart(2, "0")}`;
+        const matching = announcements.filter((item) => {
+          const start = String(item.publish_date || item.event_date || "").slice(0, 10);
+          const end = String(item.end_date || start).slice(0, 10);
+          return start && dateStr >= start && dateStr <= end;
+        });
+
+        if (matching.length > 0) {
+          const holidayEv = matching.find(
+            (ev) => ev.category === "holiday" || ev.type === "libur"
+          );
+          const importantEv = matching.find(
+            (ev) =>
+              ev.category === "important" ||
+              ev.priority === "important" ||
+              ev.priority === "urgent" ||
+              ev.priority_code === "important" ||
+              ev.priority_code === "urgent"
+          );
+          const primaryEv = holidayEv ?? importantEv ?? matching[0];
+          const color = resolveAnnouncementMarkerColor(primaryEv);
+
+          map[dayNum] = {
+            type: color,
+            label: primaryEv.title || "Pengumuman",
+            count: matching.length,
+            events: matching,
+            isToday: false,
+          };
+        }
+      }
     }
-    return {};
-  }, [calendarSummary, selectedYear, selectedMonthIdx]);
+
+    return map;
+  }, [calendarSummary, announcements, selectedYear, selectedMonthIdx, monthString]);
 
   const now = new Date();
-  const isCurrentRealMonth =
-    now.getFullYear() === selectedYear && now.getMonth() === selectedMonthIdx;
-  const todayDayNumber = isCurrentRealMonth
-    ? now.getDate()
-    : selectedYear === 2026 && selectedMonthIdx === 9
-    ? 23
+  const todayFromBackend = calendarSummary?.today
+    ? String(calendarSummary.today).slice(0, 10)
     : null;
+  const todayDayNumber = useMemo(() => {
+    if (todayFromBackend && todayFromBackend.startsWith(monthString)) {
+      const parsed = Number(todayFromBackend.slice(8, 10));
+      if (!Number.isNaN(parsed)) return parsed;
+    }
+    const isCurrentRealMonth =
+      now.getFullYear() === selectedYear && now.getMonth() === selectedMonthIdx;
+    return isCurrentRealMonth ? now.getDate() : null;
+  }, [todayFromBackend, monthString, selectedYear, selectedMonthIdx]);
 
   return (
     <DashboardLayout>
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
           {/* ============ HEADER ============ */}
           <div className="animate-item delay-100 mb-5 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
             <div>
@@ -432,47 +506,78 @@ export default function KalenderAgenda() {
             <div className="flex flex-1 flex-col justify-center">
               <div className="grid grid-cols-7 gap-1">
                 {calendarGrid.map((day, i) => {
-                  if (day === null) return <div key={i} className="min-h-[52px]"></div>;
+                  if (day === null) return <div key={i} className="min-h-[56px]"></div>;
 
                   const isToday = day === todayDayNumber;
                   const event = eventDays[day];
                   const isWeekend = i % 7 >= 5;
+                  const isSelected = selectedDay === day;
+
+                  const markerTheme =
+                    event?.type === "red"
+                      ? {
+                          cell: "border-red-300 bg-red-50/40 hover:bg-red-50",
+                          badge: "bg-red-100 text-red-600",
+                          bar: "bg-red-500",
+                          text: "text-red-700",
+                        }
+                      : event?.type === "amber"
+                      ? {
+                          cell: "border-amber-300 bg-amber-50/40 hover:bg-amber-50",
+                          badge: "bg-amber-100 text-amber-700",
+                          bar: "bg-amber-500",
+                          text: "text-amber-800",
+                        }
+                      : {
+                          cell: "border-emerald-300 bg-emerald-50/30 hover:bg-emerald-50/60",
+                          badge: "bg-emerald-100 text-emerald-700",
+                          bar: "bg-emerald-500",
+                          text: "text-emerald-800",
+                        };
 
                   return (
                     <button
                       key={i}
                       type="button"
-                      className={`relative min-h-[52px] rounded-lg border p-1.5 text-left transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 ${
+                      onClick={() => setSelectedDay((prev) => (prev === day ? null : day))}
+                      title={event ? `${event.label}${event.count > 1 ? ` (+${event.count - 1} lainnya)` : ""}` : undefined}
+                      className={`relative min-h-[56px] rounded-lg border p-1.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm ${
                         isToday
-                          ? "border-emerald-600 bg-emerald-50"
+                          ? "border-emerald-600 bg-emerald-50 ring-1 ring-emerald-500/30"
                           : event
-                          ? "border-gray-200 bg-white hover:bg-gray-50"
+                          ? markerTheme.cell
                           : "border-transparent hover:bg-gray-50"
-                      }`}
+                      } ${isSelected ? "ring-2 ring-emerald-600" : ""}`}
                     >
-                      <span
-                        className={`flex h-6 w-6 items-center justify-center rounded text-xs font-bold ${
-                          isToday
-                            ? "bg-emerald-700 text-white"
-                            : isWeekend
-                            ? "text-gray-300"
-                            : "text-gray-700"
-                        }`}
-                      >
-                        {day}
-                      </span>
+                      <div className="flex items-start justify-between gap-1">
+                        <span
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded text-xs font-bold ${
+                            isToday
+                              ? "bg-emerald-700 text-white"
+                              : isWeekend
+                              ? "text-gray-300"
+                              : "text-gray-700"
+                          }`}
+                        >
+                          {day}
+                        </span>
+
+                        {event && (
+                          <span
+                            className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${markerTheme.badge}`}
+                          >
+                            {eventTypeSymbols[event.type] || eventTypeSymbols.emerald}
+                            {event.count > 1 && <span>{event.count}</span>}
+                          </span>
+                        )}
+                      </div>
+
                       {event && (
                         <div className="mt-1">
                           <span
-                            className={`inline-block h-1.5 w-full rounded-full ${
-                              event.type === "emerald"
-                                ? "bg-emerald-500"
-                                : event.type === "amber"
-                                ? "bg-amber-500"
-                                : "bg-red-500"
-                            }`}
+                            className={`inline-block h-1.5 w-full rounded-full ${markerTheme.bar}`}
                           ></span>
-                          <p className="mt-0.5 truncate text-[8px] font-semibold text-gray-600">
+                          <p className={`mt-0.5 truncate text-[8px] font-bold ${markerTheme.text}`}>
                             {event.label}
                           </p>
                         </div>
@@ -488,19 +593,80 @@ export default function KalenderAgenda() {
               </div>
             </div>
 
+            {/* Detail Pengumuman pada Tanggal yang Dipilih */}
+            {selectedDay && eventDays[selectedDay] && (
+              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-gray-900">
+                    Pengumuman pada {selectedDay} {currentMonthLabel}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDay(null)}
+                    className="text-[10px] font-semibold text-gray-500 hover:text-gray-700"
+                  >
+                    Tutup ✕
+                  </button>
+                </div>
+                <div className="mt-2 space-y-1.5">
+                  {eventDays[selectedDay].events.map((ev, idx) => {
+                    const color = resolveAnnouncementMarkerColor(ev);
+                    return (
+                      <div
+                        key={ev.id || idx}
+                        className="flex items-start gap-2 rounded-md bg-white p-2 text-xs shadow-2xs"
+                      >
+                        <span
+                          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                            color === "red"
+                              ? "bg-red-100 text-red-600"
+                              : color === "amber"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-emerald-100 text-emerald-700"
+                          }`}
+                        >
+                          {eventTypeSymbols[color]}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-gray-900">{ev.title}</p>
+                          {ev.description && (
+                            <p className="mt-0.5 text-[11px] text-gray-600">
+                              {ev.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Legend */}
             <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-3">
               <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-600"></span>
-                Hari Ini / Agenda Aktif
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-emerald-700 text-[9px] font-bold text-white">
+                  {todayDayNumber ?? "•"}
+                </span>
+                Hari Ini
               </div>
               <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
-                Agenda Penting
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                  {eventTypeSymbols.emerald}
+                </span>
+                Pengumuman / Agenda Aktif
               </div>
               <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
-                <span className="h-2.5 w-2.5 rounded-full bg-red-500"></span>
-                Libur Nasional / Cuti
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                  {eventTypeSymbols.amber}
+                </span>
+                Pengumuman Penting (★)
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-100 text-red-600">
+                  {eventTypeSymbols.red}
+                </span>
+                Libur Nasional / Cuti (⚑)
               </div>
             </div>
           </div>

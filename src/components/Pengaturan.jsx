@@ -232,7 +232,7 @@ export default function Pengaturan() {
 
   return (
     <DashboardLayout>
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
 
           {/* BANNER HIJAU */}
           <div className="animate-item delay-100 relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-800 to-emerald-600 p-6 text-white transition-all duration-300 hover:shadow-lg">
@@ -446,7 +446,7 @@ export default function Pengaturan() {
             <div className="flex flex-col gap-4">
               {/* ==== DATA DIRI ==== */}
               <div className="rounded-xl border border-gray-200 bg-white p-5 transition-all duration-300 hover:shadow-md">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-bold text-gray-900">
                       Data Diri & Kedinasan Admin

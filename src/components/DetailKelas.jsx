@@ -94,12 +94,15 @@ function getTodayLocalString() {
   return `${year}-${month}-${day}`;
 }
 
+const ITEMS_PER_PAGE = 8;
+
 // ============ MAIN ============
 export default function DetailKelas() {
   const { kelas } = useParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [selectedDate, setSelectedDate] = useState(() => getTodayLocalString());
+  const [currentPage, setCurrentPage] = useState(1);
   const [detail, setDetail] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -146,6 +149,18 @@ export default function DetailKelas() {
     }
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredSiswa.length / ITEMS_PER_PAGE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedSiswa = filteredSiswa.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, currentKelas, selectedDate]);
 
   const statsData = [
     {
@@ -312,20 +327,20 @@ export default function DetailKelas() {
                       Memuat daftar siswa dari database...
                     </td>
                   </tr>
-                ) : filteredSiswa.length === 0 ? (
+                ) : paginatedSiswa.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-8 text-center text-xs text-gray-400">
                       Tidak ada data siswa yang cocok.
                     </td>
                   </tr>
                 ) : (
-                  filteredSiswa.map((s, idx) => {
+                  paginatedSiswa.map((s, idx) => {
                     const stStyle = statusStyles[s.status] || statusStyles.belum_hadir;
                     const faceTarget = s.scan_id ? s.scan_id : s.nisn;
                     return (
                       <tr key={s.nisn || idx} className="text-xs hover:bg-gray-50/50 transition-colors">
                         <td className="px-4 py-3 text-center font-medium text-gray-500">
-                          {s.absence_number ?? idx + 1}
+                          {s.absence_number ?? startIndex + idx + 1}
                         </td>
                         <td className="px-4 py-3 font-mono text-gray-700">{s.nisn}</td>
                         <td className="px-4 py-3 font-semibold text-gray-900">
@@ -355,12 +370,57 @@ export default function DetailKelas() {
             </table>
           </div>
 
-          {/* Footer Tabel */}
-          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3 text-[10px] text-gray-500">
-            <span>
-              Menampilkan <strong className="text-gray-700">{filteredSiswa.length}</strong> dari{" "}
-              <strong className="text-gray-700">{counts.total_students}</strong> siswa
+          {/* Footer Tabel & Pagination */}
+          <div className="relative flex flex-col items-center justify-center gap-3 border-t border-gray-100 px-4 py-3 text-[10px] text-gray-500 sm:flex-row">
+            <span className="sm:absolute sm:left-4">
+              Menampilkan{" "}
+              <strong className="text-gray-700">
+                {filteredSiswa.length === 0
+                  ? 0
+                  : `${startIndex + 1}–${Math.min(
+                      startIndex + ITEMS_PER_PAGE,
+                      filteredSiswa.length
+                    )}`}
+              </strong>{" "}
+              dari <strong className="text-gray-700">{filteredSiswa.length}</strong> siswa
             </span>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-1">
+                <button
+                  type="button"
+                  disabled={safeCurrentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ‹ Sebelumnya
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`flex h-7 min-w-7 items-center justify-center rounded-md border px-2 text-[11px] font-bold transition ${
+                      pageNum === safeCurrentPage
+                        ? "border-emerald-700 bg-emerald-700 text-white"
+                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  disabled={safeCurrentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Berikutnya ›
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

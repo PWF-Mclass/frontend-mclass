@@ -39,6 +39,17 @@ export default function ProtectedRoute({ roles }) {
     };
   }, [token, roles]);
 
-  if (checking) return <div>Memeriksa sesi...</div>;
+  if (checking) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#f4f6f8] px-4">
+        <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+          <span className="text-xs font-semibold text-gray-600">
+            Memeriksa sesi keamanan madrasah...
+          </span>
+        </div>
+      </div>
+    );
+  }
   return isValid ? <Outlet /> : <Navigate to="/login" replace />;
 }

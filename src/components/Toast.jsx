@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 export default function Toast({ isOpen, onClose, title, message, type = "success", duration = 3000 }) {
   // Auto close setelah duration
@@ -72,7 +73,7 @@ export default function Toast({ isOpen, onClose, title, message, type = "success
 
   const style = styles[type] || styles.success;
 
-  return (
+  return createPortal(
     <div className="fixed right-4 top-4 z-[100] w-full max-w-sm animate-slide-in">
       <div className={`flex items-start gap-3 rounded-xl border ${style.border} ${style.bg} p-4 shadow-lg backdrop-blur-sm`}>
         {/* Icon */}
@@ -101,6 +102,7 @@ export default function Toast({ isOpen, onClose, title, message, type = "success
           </svg>
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

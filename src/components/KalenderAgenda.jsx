@@ -153,6 +153,8 @@ function resolveAnnouncementMarkerColor(item) {
   return "emerald";
 }
 
+const ANNOUNCEMENTS_PER_PAGE = 6;
+
 export default function KalenderAgenda() {
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(() => new Date().getMonth());
@@ -165,7 +167,9 @@ export default function KalenderAgenda() {
 
   const [categoryFilter, setCategoryFilter] = useState("");
   const [audienceFilter, setAudienceFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [editingItem, setEditingItem] = useState(null);
+  const [editError, setEditError] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const [toast, setToast] = useState({
@@ -203,6 +207,21 @@ export default function KalenderAgenda() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [categoryFilter, audienceFilter]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(announcements.length / ANNOUNCEMENTS_PER_PAGE)
+  );
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * ANNOUNCEMENTS_PER_PAGE;
+  const paginatedAnnouncements = announcements.slice(
+    startIndex,
+    startIndex + ANNOUNCEMENTS_PER_PAGE
+  );
 
   const handlePrevMonth = () => {
     setSelectedDay(null);
@@ -248,15 +267,27 @@ export default function KalenderAgenda() {
     e.preventDefault();
     if (!editingItem) return;
 
+    const trimmedTitle = String(editingItem.title || "").trim();
+    const trimmedDesc = String(editingItem.description || "").trim();
+    if (!trimmedTitle) {
+      setEditError("Judul pengumuman wajib diisi.");
+      return;
+    }
+    if (!trimmedDesc) {
+      setEditError("Deskripsi pengumuman wajib diisi.");
+      return;
+    }
+
+    setEditError("");
     setIsSavingEdit(true);
     try {
       await updateAnnouncement(editingItem.id, {
-        title: editingItem.title,
+        title: trimmedTitle,
         category: editingItem.category,
         publish_date: String(editingItem.publish_date).slice(0, 10),
         target_audience: editingItem.target_audience,
         priority: editingItem.priority,
-        description: editingItem.description,
+        description: trimmedDesc,
         status: editingItem.status || "published",
       });
       setEditingItem(null);
@@ -672,7 +703,7 @@ export default function KalenderAgenda() {
           </div>
 
           {/* ============ DAFTAR & MANAJEMEN PENGUMUMAN ============ */}
-          <div className="animate-item delay-300 mt-6 rounded-xl border border-gray-200 bg-white p-5">
+          <div className="animate-item delay-300 mt-6 flex flex-col rounded-xl border border-gray-200 bg-white p-5">
             <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
               <div>
                 <h3 className="text-base font-bold text-gray-900">
@@ -712,17 +743,17 @@ export default function KalenderAgenda() {
               </div>
             </div>
 
-            <div className="mt-4 divide-y divide-gray-100">
+            <div className="mt-4 flex-1 divide-y divide-gray-100">
               {isLoading ? (
                 <p className="py-6 text-center text-xs text-gray-400">
                   Memuat daftar pengumuman...
                 </p>
-              ) : announcements.length === 0 ? (
+              ) : paginatedAnnouncements.length === 0 ? (
                 <p className="py-6 text-center text-xs text-gray-400">
                   Belum ada pengumuman yang sesuai dengan filter.
                 </p>
               ) : (
-                announcements.map((item) => (
+                paginatedAnnouncements.map((item) => (
                   <div
                     key={item.id}
                     className="flex flex-col justify-between gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-start"
@@ -772,6 +803,57 @@ export default function KalenderAgenda() {
                 ))
               )}
             </div>
+
+            {/* Footer & Pagination Pengumuman */}
+            {!isLoading && announcements.length > 0 && (
+              <div className="relative mt-auto flex flex-col items-center justify-center gap-3 border-t border-gray-100 pt-4 text-[10px] text-gray-500 sm:flex-row">
+                <span className="sm:absolute sm:left-0">
+                  Menampilkan{" "}
+                  <strong className="text-gray-700">
+                    {`${startIndex + 1}–${Math.min(
+                      startIndex + ANNOUNCEMENTS_PER_PAGE,
+                      announcements.length
+                    )}`}
+                  </strong>{" "}
+                  dari <strong className="text-gray-700">{announcements.length}</strong> pengumuman
+                </span>
+
+                <div className="flex items-center justify-center gap-1">
+                  <button
+                    type="button"
+                    disabled={safeCurrentPage === 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className="flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ‹ Sebelumnya
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`flex h-7 min-w-7 items-center justify-center rounded-md border px-2 text-[11px] font-bold transition ${
+                        pageNum === safeCurrentPage
+                          ? "border-emerald-700 bg-emerald-700 text-white"
+                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    disabled={safeCurrentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className="flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Berikutnya ›
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* MODAL EDIT PENGUMUMAN */}
@@ -779,9 +861,13 @@ export default function KalenderAgenda() {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div
                 className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
-                onClick={() => setEditingItem(null)}
+                onClick={() => {
+                  setEditingItem(null);
+                  setEditError("");
+                }}
               ></div>
               <form
+                noValidate
                 onSubmit={handleSaveEdit}
                 className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl"
               >
@@ -791,26 +877,40 @@ export default function KalenderAgenda() {
                   </h3>
                   <button
                     type="button"
-                    onClick={() => setEditingItem(null)}
+                    onClick={() => {
+                      setEditingItem(null);
+                      setEditError("");
+                    }}
                     className="rounded p-1 text-gray-400 hover:bg-gray-100"
                   >
                     ✕
                   </button>
                 </div>
 
+                {editError && (
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" x2="12" y1="8" y2="12" />
+                      <line x1="12" x2="12.01" y1="16" y2="16" />
+                    </svg>
+                    <span>{editError}</span>
+                  </div>
+                )}
+
                 <div className="mt-4 space-y-3">
                   <div>
                     <label className="mb-1 block text-[11px] font-bold text-gray-700">
-                      Judul Pengumuman
+                      Judul Pengumuman <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
-                      required
                       value={editingItem.title}
-                      onChange={(e) =>
-                        setEditingItem({ ...editingItem, title: e.target.value })
-                      }
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs"
+                      onChange={(e) => {
+                        setEditingItem({ ...editingItem, title: e.target.value });
+                        if (editError) setEditError("");
+                      }}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-emerald-500 focus:outline-none"
                     />
                   </div>
 
@@ -859,19 +959,19 @@ export default function KalenderAgenda() {
 
                   <div>
                     <label className="mb-1 block text-[11px] font-bold text-gray-700">
-                      Deskripsi
+                      Deskripsi <span className="text-red-500">*</span>
                     </label>
                     <textarea
                       rows={4}
-                      required
                       value={editingItem.description}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setEditingItem({
                           ...editingItem,
                           description: e.target.value,
-                        })
-                      }
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs"
+                        });
+                        if (editError) setEditError("");
+                      }}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs focus:border-emerald-500 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -879,7 +979,10 @@ export default function KalenderAgenda() {
                 <div className="mt-4 flex justify-end gap-2 border-t border-gray-100 pt-3">
                   <button
                     type="button"
-                    onClick={() => setEditingItem(null)}
+                    onClick={() => {
+                      setEditingItem(null);
+                      setEditError("");
+                    }}
                     className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-semibold text-gray-700"
                   >
                     Batal

@@ -38,7 +38,6 @@ export default function Dashboard() {
 
   const totals = summary?.totals;
   const totalStudents = totals?.total_students ?? 0;
-  const sudahHadir = totals?.sudah_hadir ?? 0;
   const terlambatIzinTotal = totals?.terlambat_izin?.total ?? 0;
   const terlambatCount = totals?.terlambat_izin?.terlambat ?? 0;
   const izinCount = totals?.terlambat_izin?.izin ?? 0;
@@ -48,9 +47,6 @@ export default function Dashboard() {
   const belumHadirAlpaTotal = totals?.belum_hadir_alpa?.total ?? 0;
   const belumHadirCount = totals?.belum_hadir_alpa?.belum_hadir ?? 0;
   const alpaCount = totals?.belum_hadir_alpa?.alpa ?? 0;
-
-  const hadirPercent =
-    totalStudents > 0 ? Math.round((sudahHadir / totalStudents) * 100) : 0;
 
   const stats = [
     {
@@ -63,16 +59,6 @@ export default function Dashboard() {
           : "Belum ada siswa terdaftar",
       subColor: "text-emerald-600",
       variant: "default",
-    },
-    {
-      label: "SUDAH HADIR",
-      value: String(sudahHadir),
-      unit: `${hadirPercent}%`,
-      subtext: summary?.date
-        ? `Presensi tanggal ${summary.date}`
-        : "Hari ini",
-      subColor: "text-emerald-600",
-      variant: "success",
     },
     {
       label: "TERLAMBAT / IZIN",
@@ -137,7 +123,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stat Cards - Animasi Masuk */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {stats.map((s, i) => (
             <div key={i} className="animate-item delay-200">
               <StatCard {...s} />

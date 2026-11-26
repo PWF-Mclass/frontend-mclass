@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { api } from "../lib/api";
 
 export default function ForgotPasswordForm() {
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
-  const [email, setEmail] = useState("admin.presensi@mtsalmaarif.sch.id");
+  const [email, setEmail] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState("");
 
@@ -13,39 +14,94 @@ export default function ForgotPasswordForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPass, setShowNewPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [infoMsg, setInfoMsg] = useState("");
 
   // Handler kirim OTP
-  const handleSendOtp = () => {
-    if (!email) {
-      alert("Email wajib diisi.");
+  const handleSendOtp = async () => {
+    setErrorMsg("");
+    setInfoMsg("");
+    if (!email.trim()) {
+      setErrorMsg("Alamat email resmi madrasah wajib diisi.");
       return;
     }
-    setOtpSent(true);
+
+    setIsSendingOtp(true);
+    try {
+      await api("/auth/forgot-password", {
+        method: "POST",
+        body: { email: email.trim() },
+      });
+      setOtpSent(true);
+      setInfoMsg("Kode OTP 6-digit telah dikirim ke email Anda.");
+    } catch (error) {
+      // Tetap tampilkan input OTP atau pesan error dari backend
+      setErrorMsg(error?.message || "Gagal mengirim kode OTP. Pastikan email terdaftar.");
+    } finally {
+      setIsSendingOtp(false);
+    }
   };
 
   // Handler lanjut ke step 2
-  const handleVerifyOtp = (e) => {
+  const handleVerifyOtp = async (e) => {
     e.preventDefault();
+    setErrorMsg("");
+    setInfoMsg("");
     if (otp.length !== 6) {
-      alert("Kode OTP harus 6 digit.");
+      setErrorMsg("Kode OTP harus terdiri dari 6 digit angka.");
       return;
     }
-    setStep(2);
+
+    setIsVerifyingOtp(true);
+    try {
+      await api("/auth/verify-otp", {
+        method: "POST",
+        body: { email: email.trim(), otp },
+      });
+      setStep(2);
+      setInfoMsg("Kode OTP terverifikasi. Silakan buat kata sandi baru.");
+    } catch (error) {
+      setErrorMsg(error?.message || "Kode OTP tidak valid atau sudah kedaluwarsa.");
+    } finally {
+      setIsVerifyingOtp(false);
+    }
   };
 
   // Handler update password
-  const handleResetPassword = (e) => {
+  const handleResetPassword = async (e) => {
     e.preventDefault();
+    setErrorMsg("");
+    setInfoMsg("");
     if (newPassword.length < 8) {
-      alert("Kata sandi minimal 8 karakter.");
+      setErrorMsg("Kata sandi baru minimal 8 karakter.");
       return;
     }
     if (newPassword !== confirmPassword) {
-      alert("Konfirmasi kata sandi tidak cocok.");
+      setErrorMsg("Konfirmasi kata sandi baru tidak cocok.");
       return;
     }
-    alert("Kata sandi berhasil diperbarui!");
-    navigate("/login");
+
+    setIsResetting(true);
+    try {
+      await api("/auth/reset-password", {
+        method: "POST",
+        body: {
+          email: email.trim(),
+          otp,
+          password: newPassword,
+          password_confirmation: confirmPassword,
+        },
+      });
+      setInfoMsg("Kata sandi berhasil diperbarui! Mengalihkan ke halaman login...");
+      setTimeout(() => navigate("/login"), 1200);
+    } catch (error) {
+      setErrorMsg(error?.message || "Gagal memperbarui kata sandi.");
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   return (
@@ -58,7 +114,7 @@ export default function ForgotPasswordForm() {
       {/* Ornamen background */}
       <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-emerald-50 opacity-50 blur-2xl"></div>
 
-      <div className="p-8 relative z-10">
+      <div className="p-6 sm:p-8 relative z-10">
         {/* Icon Shield - Animasi Masuk */}
         <div className="animate-item delay-100 flex justify-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 shadow-sm">
@@ -94,13 +150,33 @@ export default function ForgotPasswordForm() {
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
             <span className="text-sm font-bold text-emerald-800">
-              MTs Al-Ma'arif Ponorogo
+              MTs Al-Ma'arif 02 Singosari
             </span>
           </div>
         </div>
 
+        {errorMsg && (
+          <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-700">
+            <svg xmlns="http://www.w3.org/2000/svg" className="mt-0.5 h-4 w-4 shrink-0 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" x2="12" y1="8" y2="12" />
+              <line x1="12" x2="12.01" y1="16" y2="16" />
+            </svg>
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {infoMsg && (
+          <div className="mt-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-medium text-emerald-800">
+            <svg xmlns="http://www.w3.org/2000/svg" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+            <span>{infoMsg}</span>
+          </div>
+        )}
+
         {/* ================= STEP 1 - Animasi Masuk ================= */}
-        <form onSubmit={handleVerifyOtp} className="mt-6 space-y-5">
+        <form noValidate onSubmit={step === 1 ? handleVerifyOtp : handleResetPassword} className="mt-5 space-y-5">
           <div className="animate-item delay-200 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
             {/* Header Step 1 */}
             <div className="flex items-center justify-between">
@@ -139,13 +215,14 @@ export default function ForgotPasswordForm() {
               <button
                 type="button"
                 onClick={handleSendOtp}
-                className="flex items-center gap-1.5 rounded-lg border border-emerald-600 bg-white px-3 py-2.5 text-xs font-bold text-emerald-700 transition-all hover:bg-emerald-50 hover:shadow-sm active:scale-[0.98]"
+                disabled={isSendingOtp}
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-600 bg-white px-3 py-2.5 text-xs font-bold text-emerald-700 transition-all hover:bg-emerald-50 hover:shadow-sm active:scale-[0.98] disabled:opacity-60"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m22 2-7 20-4-9-9-4Z" />
                   <path d="M22 2 11 13" />
                 </svg>
-                {otpSent ? "Kirim Ulang" : "Kirim OTP"}
+                {isSendingOtp ? "Mengirim..." : otpSent ? "Kirim Ulang" : "Kirim OTP"}
               </button>
             </div>
 
@@ -289,24 +366,24 @@ export default function ForgotPasswordForm() {
             {step === 1 ? (
               <button
                 type="submit"
-                disabled={!otpSent}
+                disabled={!otpSent || isVerifyingOtp}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 py-3 text-sm font-bold text-white transition-all hover:bg-emerald-800 hover:shadow-md active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none disabled:active:scale-100"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 6 9 17l-5-5" />
                 </svg>
-                Verifikasi OTP & Lanjutkan
+                {isVerifyingOtp ? "Memverifikasi..." : "Verifikasi OTP & Lanjutkan"}
               </button>
             ) : (
               <button
-                type="button"
-                onClick={handleResetPassword}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 py-3 text-sm font-bold text-white transition-all hover:bg-emerald-800 hover:shadow-md active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                type="submit"
+                disabled={isResetting}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 py-3 text-sm font-bold text-white transition-all hover:bg-emerald-800 hover:shadow-md active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-60"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 6 9 17l-5-5" />
                 </svg>
-                Perbarui Kata Sandi
+                {isResetting ? "Memperbarui..." : "Perbarui Kata Sandi"}
               </button>
             )}
           </div>

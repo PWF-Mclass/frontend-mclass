@@ -10,37 +10,45 @@ export default function RegistrationForm() {
     agreement: false,
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    setErrorMsg("");
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
   };
 
-const handleSubmit = (e) => {
-  e.preventDefault();
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setErrorMsg("");
 
-  // Validasi sederhana
-  if (!formData.agreement) {
-    alert("Kamu harus menyetujui pernyataan terlebih dahulu.");
-    return;
-  }
-  if (formData.password.length < 8) {
-    alert("Kata sandi minimal 8 karakter.");
-    return;
-  }
+    if (!formData.nama.trim()) {
+      setErrorMsg("Nama lengkap & gelar wajib diisi.");
+      return;
+    }
+    if (!formData.email.trim()) {
+      setErrorMsg("Alamat email resmi wajib diisi.");
+      return;
+    }
+    if (formData.password.length < 8) {
+      setErrorMsg("Kata sandi minimal 8 karakter.");
+      return;
+    }
+    if (!formData.agreement) {
+      setErrorMsg("Anda wajib menyetujui pernyataan integritas data terlebih dahulu.");
+      return;
+    }
 
-  // TODO: kirim data ke API di sini
-  console.log("Submit:", formData);
-
-  // Redirect ke halaman login
-  navigate("/login");
-};
+    setSuccessMsg("Permohonan registrasi petugas tercatat. Mengalihkan ke halaman login...");
+    setTimeout(() => navigate("/login"), 1200);
+  };
 
   return (
-    <div className="mx-auto w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+    <div className="mx-auto w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
       {/* Badge & Step */}
       <div className="mb-5 flex items-center justify-between">
         <div className="flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1">
@@ -76,7 +84,7 @@ const handleSubmit = (e) => {
           <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
         </svg>
         <span className="text-sm font-bold text-emerald-800">
-          MTs Al-Ma'arif 
+          MTs Al-Ma'arif 02 Singosari
         </span>
       </div>
 
@@ -85,7 +93,27 @@ const handleSubmit = (e) => {
         hak otorisasi presensi harian siswa.
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+      {errorMsg && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-700">
+          <svg xmlns="http://www.w3.org/2000/svg" className="mt-0.5 h-4 w-4 shrink-0 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" x2="12" y1="8" y2="12" />
+            <line x1="12" x2="12.01" y1="16" y2="16" />
+          </svg>
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-medium text-emerald-800">
+          <svg xmlns="http://www.w3.org/2000/svg" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-5">
         {/* Nama */}
         <div>
           <label className="mb-1.5 block text-sm font-bold text-gray-800">

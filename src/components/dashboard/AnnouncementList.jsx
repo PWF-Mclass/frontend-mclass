@@ -25,21 +25,25 @@ function mapFromBackend(item) {
   };
 }
 
+const DASHBOARD_ANNOUNCEMENTS_PER_PAGE = 6;
+
 export default function AnnouncementList() {
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     let isMounted = true;
     setIsLoading(true);
+    setCurrentPage(1);
     listAnnouncements({
       category: selectedCategory || undefined,
     })
       .then((data) => {
         if (!isMounted) return;
         if (Array.isArray(data)) {
-          setItems(data.slice(0, 5).map(mapFromBackend));
+          setItems(data.map(mapFromBackend));
         } else {
           setItems([]);
         }
@@ -56,8 +60,19 @@ export default function AnnouncementList() {
     };
   }, [selectedCategory]);
 
+  const totalPages = Math.max(
+    1,
+    Math.ceil(items.length / DASHBOARD_ANNOUNCEMENTS_PER_PAGE)
+  );
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * DASHBOARD_ANNOUNCEMENTS_PER_PAGE;
+  const paginatedItems = items.slice(
+    startIndex,
+    startIndex + DASHBOARD_ANNOUNCEMENTS_PER_PAGE
+  );
+
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
+    <div className="flex h-full flex-col rounded-xl border border-gray-200 bg-white p-5">
       {/* Header */}
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
@@ -95,17 +110,17 @@ export default function AnnouncementList() {
       </div>
 
       {/* List */}
-      <div className="mt-4 divide-y divide-gray-100">
+      <div className="mt-4 flex-1 divide-y divide-gray-100">
         {isLoading ? (
           <p className="py-4 text-center text-xs text-gray-400">
             Memuat pengumuman...
           </p>
-        ) : items.length === 0 ? (
+        ) : paginatedItems.length === 0 ? (
           <p className="py-4 text-center text-xs text-gray-400">
             Tidak ada pengumuman pada kategori ini.
           </p>
         ) : (
-          items.map((item) => (
+          paginatedItems.map((item) => (
             <div key={item.id} className="py-4 first:pt-0 last:pb-0">
               <div className="flex items-center gap-2">
                 <span className={`rounded px-2 py-0.5 text-[9px] font-bold text-white ${item.tagColor}`}>
@@ -125,6 +140,57 @@ export default function AnnouncementList() {
           ))
         )}
       </div>
+
+      {/* Pagination */}
+      {!isLoading && items.length > 0 && (
+        <div className="relative mt-auto flex flex-col items-center justify-center gap-2 border-t border-gray-100 pt-4 text-[10px] text-gray-500 sm:flex-row">
+          <span className="sm:absolute sm:left-0">
+            Menampilkan{" "}
+            <strong className="text-gray-700">
+              {`${startIndex + 1}–${Math.min(
+                startIndex + DASHBOARD_ANNOUNCEMENTS_PER_PAGE,
+                items.length
+              )}`}
+            </strong>{" "}
+            dari <strong className="text-gray-700">{items.length}</strong>
+          </span>
+
+          <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              disabled={safeCurrentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ‹ Sebelumnya
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setCurrentPage(pageNum)}
+                className={`flex h-7 min-w-7 items-center justify-center rounded-md border px-2 text-[11px] font-bold transition ${
+                  pageNum === safeCurrentPage
+                    ? "border-emerald-700 bg-emerald-700 text-white"
+                    : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {pageNum}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              disabled={safeCurrentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Berikutnya ›
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

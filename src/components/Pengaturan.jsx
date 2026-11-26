@@ -176,6 +176,55 @@ export default function Pengaturan() {
   };
 
   const handleSimpanPerubahan = async () => {
+    const initialProfile = toProfile(user);
+    const isNameChanged =
+      profile.nama.trim() !== initialProfile.nama.trim();
+    const isEmailChanged =
+      profile.email.trim().toLowerCase() !==
+      initialProfile.email.trim().toLowerCase();
+    const isPasswordProvided = Boolean(
+      newPassword.trim() || currentPassword.trim()
+    );
+
+    if (!isNameChanged && !isEmailChanged && !isPasswordProvided) {
+      setToast({
+        open: true,
+        title: "Belum Ada Perubahan",
+        message: "Tidak ada perubahan data profil atau kata sandi untuk disimpan.",
+        type: "warning",
+      });
+      return;
+    }
+
+    const clientErrors = {};
+    if (!profile.nama.trim()) {
+      clientErrors.name = "Nama lengkap wajib diisi.";
+    }
+    if (!profile.email.trim()) {
+      clientErrors.email = "Alamat email resmi wajib diisi.";
+    }
+    if (isPasswordProvided) {
+      if (!currentPassword.trim()) {
+        clientErrors.current_password = "Kata sandi saat ini wajib diisi untuk mengganti kata sandi.";
+      }
+      if (!newPassword.trim()) {
+        clientErrors.new_password = "Kata sandi baru wajib diisi.";
+      } else if (newPassword.trim().length < 8) {
+        clientErrors.new_password = "Kata sandi baru minimal 8 karakter.";
+      }
+    }
+
+    if (Object.keys(clientErrors).length > 0) {
+      setFieldErrors(clientErrors);
+      setToast({
+        open: true,
+        title: "Data Belum Lengkap",
+        message: "Periksa kembali kolom yang ditandai merah sebelum menyimpan.",
+        type: "error",
+      });
+      return;
+    }
+
     setIsSavingProfile(true);
     setFieldErrors({});
 
@@ -185,7 +234,7 @@ export default function Pengaturan() {
         email: profile.email,
       };
 
-      if (newPassword.trim() || currentPassword.trim()) {
+      if (isPasswordProvided) {
         payload.current_password = currentPassword;
         payload.new_password = newPassword;
         payload.new_password_confirmation = newPassword;
@@ -596,10 +645,16 @@ export default function Pengaturan() {
                         onClick={() => setShowCurrentPassword((v) => !v)}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                          <circle cx="12" cy="12" r="3" />
-                        </svg>
+                        {showCurrentPassword ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20" />
+                          </svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
                       </button>
                     </div>
                     {getFieldError("current_password") && (
@@ -636,10 +691,16 @@ export default function Pengaturan() {
                         onClick={() => setShowNewPassword((v) => !v)}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                          <circle cx="12" cy="12" r="3" />
-                        </svg>
+                        {showNewPassword ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20" />
+                          </svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
                       </button>
                     </div>
                     {getFieldError("new_password") && (
@@ -684,6 +745,7 @@ export default function Pengaturan() {
             onClose={() => setShowFotoModal(false)}
             onConfirm={handleSimpanFoto}
             onDeleteCurrent={fotoProfil ? handleHapusFoto : undefined}
+            hasCurrentPhoto={Boolean(fotoProfil)}
             user={{
               nama: profile.nama,
               avatarSeed: avatarInitials,

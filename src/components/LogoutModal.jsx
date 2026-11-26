@@ -1,10 +1,79 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { resolveBackendUrl } from "../lib/api";
+
+function getInitials(nameOrEmail) {
+  const cleaned = String(nameOrEmail || "P").trim();
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return cleaned.slice(0, 2).toUpperCase();
+}
+
+function formatRoleLabel(role) {
+  if (role === "admin") return "Super Admin & Petugas Presensi";
+  if (role === "guru") return "Wali Kelas & Guru Presensi";
+  return "Petugas Presensi Madrasah";
+}
+
+function formatDurationSince(createdAtIso) {
+  if (!createdAtIso) return "Aktif pada sesi saat ini";
+  const start = new Date(createdAtIso);
+  if (Number.isNaN(start.getTime())) return "Aktif pada sesi saat ini";
+
+  const startTimeStr = start.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Jakarta",
+  });
+
+  const diffMs = Math.max(0, Date.now() - start.getTime());
+  const totalMinutes = Math.floor(diffMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0) {
+    return `Aktif sejak ${startTimeStr} WIB (${hours} jam ${minutes} menit)`;
+  }
+  return `Aktif sejak ${startTimeStr} WIB (${Math.max(1, minutes)} menit)`;
+}
 
 export default function LogoutModal({ isOpen, onClose, onConfirm }) {
+  const { user, fetchSessions } = useAuth();
   const [rememberPrefs, setRememberPrefs] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [currentSession, setCurrentSession] = useState(null);
+
+  useEffect(() => {
+    if (!isOpen || !fetchSessions) return;
+    let isMounted = true;
+    fetchSessions()
+      .then((sessions) => {
+        if (!isMounted || !Array.isArray(sessions)) return;
+        const active = sessions.find((s) => s.is_current) || sessions[0] || null;
+        setCurrentSession(active);
+      })
+      .catch(() => {
+        if (isMounted) setCurrentSession(null);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, fetchSessions]);
 
   if (!isOpen) return null;
+
+  const displayName = user?.name || user?.email || "Petugas Madrasah";
+  const displayRole = formatRoleLabel(user?.role);
+  const initials = getInitials(displayName);
+  const avatarUrl = resolveBackendUrl(user?.photo_url ?? user?.avatar_url);
+  const staffCode = user?.staff_code || (user?.id ? `AGR-${String(user.id).padStart(3, "0")}` : null);
+
+  const durationText = formatDurationSince(currentSession?.created_at);
+  const deviceLabel = currentSession?.device || "Peramban Web Aktif";
+  const ipLabel = currentSession?.ip_address || currentSession?.ip || "Sesi Terenkripsi";
 
   const handleConfirm = async () => {
     setIsLoggingOut(true);
@@ -55,7 +124,7 @@ export default function LogoutModal({ isOpen, onClose, onConfirm }) {
                 >
                   <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
                 </svg>
-                Konfirmasi Keamanan Sesi • MTs Al-Ma'arif
+                Konfirmasi Keamanan Sesi • MTs Al-Ma'arif 02
               </div>
               <h2 className="mt-1 text-lg font-extrabold text-gray-900">
                 Keluar dari Sistem Presensi?
@@ -83,24 +152,38 @@ export default function LogoutModal({ isOpen, onClose, onConfirm }) {
         {/* Body */}
         <div className="p-5">
           <p className="text-xs leading-relaxed text-gray-600">
-            Sesi aktif Anda sebagai Guru Piket akan diakhiri. Pastikan semua verifikasi presensi santri dan sinkronisasi data hari ini telah tersimpan dengan aman sebelum meninggalkan perangkat.
+            Sesi aktif Anda sebagai <strong>{displayRole}</strong> akan diakhiri. Pastikan semua verifikasi presensi santri dan sinkronisasi data hari ini telah tersimpan dengan aman sebelum meninggalkan perangkat.
           </p>
 
           {/* User Info Card */}
           <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
             <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-700 text-xs font-bold text-white">
-                AF
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-emerald-700 text-xs font-bold text-white">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt={displayName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  initials
+                )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-gray-900">
-                  Ust. H. Ahmad Fauzi, S.Pd
+                <p className="truncate text-sm font-bold text-gray-900">
+                  {displayName}
                 </p>
-                <p className="text-[10px] text-gray-500">
-                  Guru Piket & Admin Presensi Harian
+                <p className="truncate text-[10px] text-gray-500">
+                  {displayRole}
+                  {staffCode ? ` • ${staffCode}` : ""}
                 </p>
+                {user?.email && (
+                  <p className="truncate text-[10px] text-gray-400">
+                    {user.email}
+                  </p>
+                )}
               </div>
-              <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+              <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                 Sesi Berjalan
               </span>
@@ -123,7 +206,7 @@ export default function LogoutModal({ isOpen, onClose, onConfirm }) {
                 <div>
                   <p className="text-gray-500">Durasi Sesi</p>
                   <p className="mt-0.5 font-semibold text-gray-800">
-                    Aktif sejak 06:30 WIB (7 jam 45 menit)
+                    {durationText}
                   </p>
                 </div>
               </div>
@@ -140,10 +223,10 @@ export default function LogoutModal({ isOpen, onClose, onConfirm }) {
                   <line x1="8" x2="16" y1="21" y2="21" />
                   <line x1="12" x2="12" y1="17" y2="21" />
                 </svg>
-                <div>
+                <div className="min-w-0">
                   <p className="text-gray-500">Perangkat & Jaringan</p>
-                  <p className="mt-0.5 font-semibold text-gray-800">
-                    Lab Komputer • 192.168.1.45
+                  <p className="mt-0.5 truncate font-semibold text-gray-800">
+                    {deviceLabel} • {ipLabel}
                   </p>
                 </div>
               </div>
@@ -167,7 +250,7 @@ export default function LogoutModal({ isOpen, onClose, onConfirm }) {
               </div>
               <p className="text-[10px] leading-relaxed text-emerald-800">
                 <strong>Semua rekaman presensi hari ini (30 Santri)</strong>{" "}
-                telah tersinkronisasi ke Cloud Kemenag & SIMPATIKA.
+                telah tersinkronisasi dengan database server M-Class.
                 <br />
                 Status antrean lokal: <strong>0 antrean tertunda (Aman).</strong>
               </p>

@@ -180,13 +180,13 @@ export default function AllClasses() {
                 </div>
 
                 {/* Class Grid */}
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4">
                   {classesInGrade.map((c) => {
                     const style = statusStyles[c.status];
                     return (
                       <div
                         key={c.classId}
-                        className={`rounded-xl border p-4 transition hover:shadow-md ${style.card}`}
+                        className={`w-full rounded-xl border p-5 transition hover:shadow-md ${style.card}`}
                       >
                         <div className="flex items-center justify-between">
                           <h4 className="text-lg font-bold text-gray-900">

@@ -328,15 +328,31 @@ export default function ValidasiWajah() {
                       </div>
                       {scanData.leave_request && (
                         <>
-                          <div className="flex justify-between text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                             <span className="text-gray-500">Keterangan Izin / Sakit</span>
-                            <span className="font-semibold text-blue-700">
-                              {scanData.leave_request.category === "sakit"
-                                ? "Sakit"
-                                : scanData.leave_request.category === "dispensasi"
-                                ? "Izin Dispensasi"
-                                : "Izin Keperluan"}: {scanData.leave_request.reason}
-                            </span>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <span className="font-semibold text-blue-700">
+                                {scanData.leave_request.category === "sakit"
+                                  ? "Sakit"
+                                  : scanData.leave_request.category === "dispensasi"
+                                  ? "Izin Dispensasi"
+                                  : "Izin Keperluan"}: {scanData.leave_request.reason}
+                              </span>
+                              {scanData.leave_request.attachment_url && (
+                                <a
+                                  href={resolveBackendUrl(scanData.leave_request.attachment_url)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 transition hover:bg-blue-100"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                  </svg>
+                                  Lihat Lampiran Surat
+                                </a>
+                              )}
+                            </div>
                           </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-gray-500">Periode Izin</span>

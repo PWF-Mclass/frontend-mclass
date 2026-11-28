@@ -128,7 +128,7 @@ export default function ValidasiWajah() {
     guardian_name: null,
   };
 
-  const radiusGeofence = scanData?.location?.radius_m ?? 15;
+  const radiusGeofence = scanData?.location?.radius_m ?? 100;
   const jarakSiswa =
     scanData?.location?.distance_m !== null &&
     scanData?.location?.distance_m !== undefined

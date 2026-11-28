@@ -75,7 +75,7 @@ export default function DetailLokasi() {
 
   const monitoredStudents = locData?.monitored_students ?? 0;
   const outsideStudents = Array.isArray(locData?.outside) ? locData.outside : [];
-  const radiusM = locData?.radius_m ?? 15;
+  const radiusM = locData?.radius_m ?? 100;
   const centerLat = locData?.center?.latitude ?? -7.9826;
   const centerLng = locData?.center?.longitude ?? 112.6308;
 

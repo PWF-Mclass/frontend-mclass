@@ -507,21 +507,6 @@ export default function KalenderAgenda() {
                   {viewMode}
                 </span>
               </div>
-              <div className="flex items-center gap-1">
-                {["Harian", "Mingguan", "Bulanan"].map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => setViewMode(mode)}
-                    className={`rounded-md px-2.5 py-1 text-[10px] font-semibold transition ${
-                      viewMode === mode
-                        ? "bg-emerald-700 text-white"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    {mode}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* Day Headers */}

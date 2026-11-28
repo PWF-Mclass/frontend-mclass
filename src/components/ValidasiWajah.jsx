@@ -319,9 +319,44 @@ export default function ValidasiWajah() {
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-500">Status Presensi</span>
                         <span className="font-semibold uppercase text-gray-800">
-                          {scanData.record?.status || scanData.outcome || "Belum Presensi"}
+                          {scanData.leave_request && scanData.leave_request.status === "disetujui"
+                            ? scanData.leave_request.category === "sakit"
+                              ? "SAKIT (DISETUJUI)"
+                              : "IZIN (DISETUJUI)"
+                            : scanData.record?.status || scanData.outcome || "Belum Presensi"}
                         </span>
                       </div>
+                      {scanData.leave_request && (
+                        <>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">Keterangan Izin / Sakit</span>
+                            <span className="font-semibold text-blue-700">
+                              {scanData.leave_request.category === "sakit"
+                                ? "Sakit"
+                                : scanData.leave_request.category === "dispensasi"
+                                ? "Izin Dispensasi"
+                                : "Izin Keperluan"}: {scanData.leave_request.reason}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">Periode Izin</span>
+                            <span className="font-semibold text-gray-800">
+                              {scanData.leave_request.start_date === scanData.leave_request.end_date
+                                ? scanData.leave_request.start_date
+                                : `${scanData.leave_request.start_date} s.d. ${scanData.leave_request.end_date}`}{" "}
+                              ({scanData.leave_request.status === "disetujui" ? "Disetujui" : "Menunggu Review"})
+                            </span>
+                          </div>
+                          {scanData.leave_request.review_note && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-500">Catatan Persetujuan</span>
+                              <span className="font-medium text-gray-700">
+                                {scanData.leave_request.review_note}
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      )}
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-500">Radius Geofence Sekolah</span>
                         <span className="font-semibold text-gray-800">

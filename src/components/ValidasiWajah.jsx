@@ -69,6 +69,7 @@ export default function ValidasiWajah() {
   const { nis } = useParams();
   const { user } = useAuth();
   const [scanData, setScanData] = useState(null);
+  const [imgLoadError, setImgLoadError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isResetting, setIsResetting] = useState(false);
   const [toast, setToast] = useState({
@@ -80,6 +81,7 @@ export default function ValidasiWajah() {
 
   const loadFaceDetail = useCallback(async () => {
     setIsLoading(true);
+    setImgLoadError(false);
     try {
       const data = await getFaceScanDetail(nis);
       setScanData(data);
@@ -256,17 +258,35 @@ export default function ValidasiWajah() {
                 {/* Foto */}
                 <div className="flex justify-center lg:justify-start">
                   <div className="relative group">
-                    <img
-                      src={photoToShow}
-                      alt={`Foto wajah ${student.name}`}
-                      className="h-72 w-72 rounded-xl border-4 border-emerald-100 object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                    />
+                    {(capturedUrl || referenceUrl) && !imgLoadError ? (
+                      <img
+                        src={capturedUrl || referenceUrl}
+                        alt={`Foto wajah ${student.name}`}
+                        onError={() => setImgLoadError(true)}
+                        className="h-72 w-72 rounded-xl border-4 border-emerald-100 object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      />
+                    ) : (
+                      <div className="flex h-72 w-72 flex-col items-center justify-center rounded-xl border-4 border-emerald-100 bg-gray-50 p-6 text-center text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="mb-2 h-12 w-12 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                          <circle cx="12" cy="13" r="3" />
+                        </svg>
+                        <p className="text-xs font-semibold text-gray-500">
+                          Tidak Ada Foto Tersedia
+                        </p>
+                        <p className="mt-1 text-[10px] text-gray-400">
+                          {!dalamRadius
+                            ? "Presensi berada di luar radius sekolah"
+                            : "Foto belum tersedia"}
+                        </p>
+                      </div>
+                    )}
                     <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-emerald-700 px-2.5 py-1 text-[10px] font-bold text-white shadow-lg">
                       {icons.camera}
-                      {capturedUrl
-                        ? "Foto Scan Presensi"
-                        : referenceUrl
-                        ? "Foto Referensi Wajah"
+                      {(capturedUrl || referenceUrl) && !imgLoadError
+                        ? capturedUrl
+                          ? "Foto Scan Presensi"
+                          : "Foto Referensi Wajah"
                         : "Belum Ada Foto"}
                     </span>
                   </div>
